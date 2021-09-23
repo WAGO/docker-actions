@@ -1,0 +1,51 @@
+name: Retrieves project information
+description: Retrieves project information
+author: nosamad
+
+inputs:
+  version:
+    description: Version string
+    default: ''
+    required: false
+
+outputs:
+  version:
+    description: Effective project version string
+    value: ${{ steps.setup-project-info.outputs.version }}
+  buildtime:
+    description: Build time string
+    value: ${{ steps.setup-project-info.outputs.buildtime }}
+
+runs:
+ using: composite
+
+ steps:
+   - name: Check environment
+     run: |
+       command -V date
+       command -V git
+       command -V sed
+       command -V bash
+     shell: sh
+     
+   - name: Set up Project information
+     id: setup-project-info
+     env:
+      VERSION: ${{ inputs.version }}
+     run: |
+       export TZ=UTC
+
+       SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --pretty='%ct')}"
+       echo "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" >> "${GITHUB_ENV}"
+
+       static_version="$VERSION"
+       if [[ -z "${static_version}" ]] || [[ "${static_version}" == *-dev ]]; then
+         git_date="$(date --utc --date "@${SOURCE_DATE_EPOCH}" +'%Y%m%d%H%M%S')"
+         git_commit="$(git log -1 --pretty='%h')"
+         static_version="0.0.0-${git_date}-${git_commit}"
+       fi
+       echo "::set-output name=version::${static_version}"
+       
+       buildtime="$(date -u -d "@${SOURCE_DATE_EPOCH}" --rfc-3339 ns 2> /dev/null | sed -e 's/ /T/')"
+       echo "::set-output name=buildtime::${buildtime}"
+     shell: bash

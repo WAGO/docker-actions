@@ -1,0 +1,56 @@
+name: "Subst image reference"
+description: "Stubst architecture specific docker image reference"
+author: "nosamad"
+
+inputs:
+  name:
+    description: 'Image name string'
+    required: true
+  version:
+    description: 'Image version string'
+    default: latest
+    required: false
+  release:
+    description: 'Image release string'
+    default: ''
+    required: false
+  arch:
+    description: 'Image arch string'
+    default: ''
+    required: false
+  repo-templ: 
+    description: 'Image repository template string'
+    default: '%ARCH_PREFIX%%NAME%:%VERSION%%RELEASE_SUFFIX%'
+    required: false
+
+outputs:
+  result:
+    description: "Substituted docker image reference string"
+    value: ${{ steps.subst-image.outputs.result }}
+    
+runs:
+ using: "composite"
+ steps:
+   - name: Check environment
+     run: |
+       command -V sed
+     shell: sh
+     
+   - name: Subst image reference
+     id: subst-image
+     run: |
+       if [ ! -z '${{ inputs.arch }}' ]; then
+         arch_prefix='${{ inputs.arch }}/'
+       fi
+       if [ ! -z '${{ inputs.release }}' ]; then
+         release_suffix='-${{ inputs.release }}'
+       fi
+       image="$(echo "${{ inputs.repo-templ }}" \
+           | sed -e "s#%ARCH_PREFIX%#${arch_prefix}#" \
+                 -e 's#%NAME%#${{ inputs.name }}#' \
+                 -e 's#%VERSION%#${{ inputs.version }}#' \
+                 -e "s#%RELEASE_SUFFIX%#${release_suffix}#" \
+         )"
+       echo "result=$image" 
+       echo "::set-output name=result::$image"
+     shell: sh
