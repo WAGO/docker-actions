@@ -1,0 +1,151 @@
+name: Set up Docker Make
+description: Set up for Docker make
+author: nosamad
+
+inputs:
+  targets:
+    description: Make targets string
+    required: false
+    default: ''
+  golang-version:
+    description: Go language version string
+    required: false
+    default: latest
+  base-debian-distro:
+    description: Base debian distro string
+    required: false
+    default: ''
+  host-arch:
+    description: Host arch string
+    required: false
+    default: ''
+  target-platform:
+    description: 'Target platform string'
+    required: false
+    default: ''
+  check-config-commit:
+    description: Check config script commit identifier string
+    required: true
+  buildx-driver-opts:
+    description: Buildx driver options string
+    required: false
+    default: ''
+  project-version:
+    description: Project version string
+    required: false
+    default: ''
+    
+outputs:
+  buildx-cache:
+    description: Path to Buildx cache string
+    value: ${{ steps.set-metainfo.outputs.buildx-cache }}
+  buildx-cache-key:
+    description: Key of Buildx cache string
+    value: ${{ steps.set-metainfo.outputs.buildx-cache-key }}
+  target-platform-id:
+    description: Target platform id string
+    value: ${{ steps.set-metainfo.outputs.target-platform-id }}
+  target-id:
+    description: Target id string
+    value: ${{ steps.set-metainfo.outputs.target-id }}
+  targets:
+    description: Target names as string
+    value: ${{ steps.set-metainfo.outputs.targets }}
+  golang-imageref:
+    description: Go image reference string
+    value: ${{ steps.subst-golang_imageref.outputs.result }}
+
+runs:
+  using: composite
+
+  steps:
+   - name: Check environment
+     run: |
+       command -V tr
+       command -V sed
+       command -V curl
+       command -V bash
+       command -V jq
+     shell: sh
+
+   - name: Retrieve Project information
+     id: setup-project-info
+     uses: WAGO/docker-actions/project-info@main
+     with:
+       version: ${{ inputs.project-version }}
+
+   - name: Set Meta information
+     id: set-metainfo
+     run: |
+       target_platform_id='${{ inputs.target-platform }}'
+       if [[ -z "${target_platform_id}" ]]; then
+         target_platform_id='${{ runner.os }}'
+       fi
+       target_platform_id="$(echo "${target_platform_id}" | tr '[:upper:]' '[:lower:]')"
+       target_platform_id="$(echo "${target_platform_id}" | tr \/ _)"
+       echo "target-platform-id=${target_platform_id}"
+       echo "::set-output name=target-platform-id::${target_platform_id}"
+       readarray -t make_targets < <(cat << EOF
+       ${{ inputs.targets }}EOF
+       )
+
+       make_targets_str="${make_targets[*]}"
+       target_id="$(echo "${make_targets_str}" | tr \/ _)"
+       echo "target-id=${target_id}"
+       echo "::set-output name=target-id::${target_id}"
+       echo "targets=${targets}"
+       echo "::set-output name=targets::${make_targets_str}"
+       echo "::set-output name=buildx-cache::/tmp/.buildx-cache"
+       buildx_cache_key="${target_platform_id}-buildx-"
+       restore_keys=("${buildx_cache_key}")
+       if [[ -n "${target_id}" ]]; then
+         buildx_cache_key="${buildx_cache_key}${target_id}-"
+         restore_keys=("${buildx_cache_key}" "${restore_keys[@]}")
+       fi
+       buildx_cache_key="${buildx_cache_key}${GITHUB_SHA}"
+       echo "::set-output name=buildx-cache-key::${buildx_cache_key}"
+       restore_keys_uriencoded="$(printf '%s\n' "${restore_keys[@]}" | jq -sRr @uri)"
+       echo "::set-output name=buildx-cache-restore-keys::${restore_keys_uriencoded}"
+
+       echo 'VERSION=${{ steps.setup-project-info.outputs.version }}' >> "${GITHUB_ENV}"
+       echo 'BUILDTIME=${{ steps.setup-project-info.outputs.buildtime }}' >> "${GITHUB_ENV}"
+     shell: bash
+
+   - name: Set up QEMU
+     uses: docker/setup-qemu-action@v1
+     with:
+       image: tonistiigi/binfmt:latest
+       platforms: all
+
+   - name: Set up Docker Buildx
+     uses: docker/setup-buildx-action@v1
+     with:
+       version: latest
+       driver-opts: |
+         ${{ inputs.buildx-driver-opts }}
+       install: true
+
+   - name: Cache Docker layers
+     uses: actions/cache@v2
+     with:
+       path: ${{ steps.set-metainfo.outputs.buildx-cache }}
+       key: ${{ steps.set-metainfo.outputs.buildx-cache-key }}
+       restore-keys: ${{ steps.set-metainfo.outputs.buildx-cache-restore-keys }}
+
+   - name: Check Docker configuration
+     env:
+       CHECK_CONFIG_COMMIT: ${{ inputs.check-config-commit }}
+     run: |
+       curl -fsSL -o './check-config.sh' "https://raw.githubusercontent.com/moby/moby/${CHECK_CONFIG_COMMIT}/contrib/check-config.sh" \
+       && bash './check-config.sh' \
+       || true
+     shell: bash
+     
+   - name: Get go language image reference
+     id: subst-golang_imageref
+     uses: WAGO/docker-actions/subst-imageref@main
+     with:
+       name: golang
+       version: ${{ inputs.golang-version }}
+       release: ${{ inputs.base-debian-distro }}
+       arch: ${{ inputs.host-arch }}
