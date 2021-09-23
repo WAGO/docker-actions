@@ -76,7 +76,7 @@ runs:
 
   - name: Set up node for docker make
     id: setup-docker-make
-    uses: WAGO/docker-actions/setup-docker-make@main
+    uses: WAGO/docker-actions/setup-docker-make@release/v1.0
     with:
       targets: ${{ inputs.targets }}
       golang-version: ${{ inputs.golang-version }}
