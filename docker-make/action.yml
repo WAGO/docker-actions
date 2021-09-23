@@ -1,0 +1,126 @@
+name: Docker make
+description: Call docker make targets
+author: nosamad
+
+inputs:
+  targets:
+    description: Make targets string
+    required: true
+  golang-version:
+    description: Go language version string
+    required: true
+  base-debian-distro:
+    description: Base debian distro string
+    required: true
+  host-arch:
+    description: Host arch string
+    required: false
+    default: ''
+  target-platform:
+    description: Target platform string
+    required: false
+    default: ''
+  check-config-commit: 
+    description: Check config script commit identifier
+    required: false
+    default: 2b0755b936416834e14208c6c37b36977e67ea35
+  buildx-build-args:
+    description: Additional buildx build arguments string
+    required: false
+    default: ''
+  buildx-driver-opts:
+    description: Buildx driver options string
+    required: false
+    default: ''
+  build-output:
+    description: Build output path
+    required: false
+    default: bundles
+  make-args:
+    description: Additional make arguments string
+    required: false
+    default: ''
+  project-version:
+    description: Project version string
+    required: false
+    default: ''
+
+outputs:
+  buildx-cache:
+    description: Path to Buildx cache string
+    value: ${{ steps.setup-docker-make.outputs.buildx-cache }}
+  buildx-cache-key:
+    description: Key of Buildx cache string
+    value: ${{ steps.setup-docker-make.outputs.buildx-cache-key }}
+  target-platform-id:
+    description: Target platform id string
+    value: ${{ steps.setup-docker-make.outputs.target-platform-id }}
+  target-id:
+    description: Target id string
+    value: ${{ steps.setup-docker-make.outputs.target-id }}
+  golang-imageref:
+    description: Go image reference string
+    value: ${{ steps.setup-docker-make.outputs.golang-imageref }}
+
+runs:
+  using: composite
+
+  steps:
+  - name: Check environment
+    run: |
+      command -V make
+      command -V bash
+      command -V rm
+      command -V mv
+    shell: sh
+
+  - name: Set up node for docker make
+    id: setup-docker-make
+    uses: WAGO/docker-actions/setup-docker-make@main
+    with:
+      targets: ${{ inputs.targets }}
+      golang-version: ${{ inputs.golang-version }}
+      base-debian-distro: ${{ inputs.base-debian-distro }}
+      host-arch: ${{ inputs.host-arch }}
+      target-platform: ${{ inputs.target-platform }}
+      check-config-commit: ${{ inputs.check-config-commit }}
+      buildx-driver-opts: ${{ inputs.buildx-driver-opts }}
+      project-version: ${{ inputs.project-version }}
+
+  - name: Make targets
+    env:
+      GOLANG_IMAGE: ${{ steps.setup-docker-make.outputs.golang-imageref }}
+      BASE_DEBIAN_DISTRO: ${{ inputs.base-debian-distro }}
+      BUILDX_CACHE: ${{ steps.setup-docker-make.outputs.buildx-cache }}
+      BIND_DIR: ${{ inputs.build-output }}
+    run: |
+      readarray -t make_targets < <(cat << EOF
+      ${{ inputs.targets }}EOF
+      )
+      readarray -t buildx_build_args < <(cat << EOF
+      ${{ inputs.buildx-build-args }}EOF
+      )
+      readarray -t make_args < <(cat << EOF
+      ${{ inputs.make-args }}EOF
+      )
+
+      docker_build_args=()
+      docker_build_args+=("--cache-from type=local,src=${BUILDX_CACHE}")
+      docker_build_args+=("--cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max")
+      docker_build_args+=("--build-arg BASE_DEBIAN_DISTRO")
+      docker_build_args+=("--build-arg GOLANG_IMAGE")
+      docker_build_args+=("${buildx_build_args[*]}")
+
+      make "${make_targets[@]}" "${make_args[@]}" DOCKER_BUILD_ARGS="${docker_build_args[*]}" DOCKER_CROSSPLATFORMS="${{ inputs.target-platform }}"
+    shell: bash
+    
+  # Temp fix
+  # https://github.com/docker/build-push-action/issues/252
+  # https://github.com/moby/buildkit/issues/1896
+  - name: Move cache
+    env:
+      BUILDX_CACHE: ${{ steps.setup-docker-make.outputs.buildx-cache }}
+    run: |
+      rm -rf "${BUILDX_CACHE}"
+      mv /tmp/.buildx-cache-new "${BUILDX_CACHE}"
+    shell: sh
