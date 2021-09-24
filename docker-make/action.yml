@@ -107,6 +107,8 @@ runs:
       docker_build_args=()
       docker_build_args+=("--cache-from type=local,src=${BUILDX_CACHE}")
       docker_build_args+=("--cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max")
+      docker_build_args+=("--build-arg SOURCE_DATE_EPOCH")
+      docker_build_args+=("--build-arg BUILDTIME")
       docker_build_args+=("--build-arg BASE_DEBIAN_DISTRO")
       docker_build_args+=("--build-arg GOLANG_IMAGE")
       docker_build_args+=("${buildx_build_args[*]}")
