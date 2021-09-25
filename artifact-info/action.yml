@@ -1,5 +1,5 @@
-name: Retrieves project information
-description: Retrieves project information
+name: Retrieves artifact information
+description: Retrieves artifact information
 author: nosamad
 
 inputs:
@@ -7,14 +7,21 @@ inputs:
     description: Version string
     default: ''
     required: false
+  platform:
+    description: Platform string
+    default: ''
+    required: false
 
 outputs:
   version:
-    description: Effective project version string
-    value: ${{ steps.setup-project-info.outputs.version }}
+    description: Effective version string
+    value: ${{ steps.set-artifact-info.outputs.version }}
   buildtime:
     description: Build time string
-    value: ${{ steps.setup-project-info.outputs.buildtime }}
+    value: ${{ steps.set-artifact-info.outputs.buildtime }}
+  platform-id:
+    description: Platform identifier string
+    value: ${{ steps.set-artifact-info.outputs.platform-id }}
 
 runs:
  using: composite
@@ -25,14 +32,21 @@ runs:
        command -V date
        command -V git
        command -V sed
+       command -V tr
        command -V bash
      shell: sh
      
-   - name: Set up Project information
-     id: setup-project-info
+   - name: Set Artifact information
+     id: set-artifact-info
      env:
       VERSION: ${{ inputs.version }}
+      PLATFORM: ${{ inputs.platform }}
      run: |
+       platform_id="${PLATFORM:-${RUNNER_OS}}"
+       platform_id="$(echo "${platform_id}" | tr '[:upper:]' '[:lower:]')"
+       platform_id="$(echo "${platform_id}" | tr \/ _)"
+       echo "::set-output name=platform-id::${platform_id}"
+
        export TZ=UTC
 
        SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --pretty='%ct')}"

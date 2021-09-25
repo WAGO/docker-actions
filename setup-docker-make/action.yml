@@ -47,7 +47,7 @@ outputs:
     value: ${{ steps.set-metainfo.outputs.target-platform-id }}
   target-id:
     description: Target id string
-    value: ${{ steps.set-metainfo.outputs.target-id }}
+    value: ${{ steps.set-artifact-info.outputs.platform-id }}
   targets:
     description: Target names as string
     value: ${{ steps.set-metainfo.outputs.targets }}
@@ -68,35 +68,30 @@ runs:
        command -V jq
      shell: sh
 
-   - name: Retrieve Project information
-     id: setup-project-info
-     uses: WAGO/docker-actions/project-info@release/v1.0
+   - name: Retrieve Artifact information
+     id: set-artifact-info
+     uses: WAGO/docker-actions/artifact-info@release/v1.0
      with:
        version: ${{ inputs.project-version }}
+       platform: ${{ inputs.target-platform }}
 
    - name: Set Meta information
      id: set-metainfo
+     env:
+       VERSION: ${{ steps.set-artifact-info.outputs.version }}
+       BUILDTIME: ${{ steps.set-artifact-info.outputs.buildtime }}
+       PLATFORM_ID: ${{ steps.set-artifact-info.outputs.platform-id }}
      run: |
-       target_platform_id='${{ inputs.target-platform }}'
-       if [[ -z "${target_platform_id}" ]]; then
-         target_platform_id='${{ runner.os }}'
-       fi
-       target_platform_id="$(echo "${target_platform_id}" | tr '[:upper:]' '[:lower:]')"
-       target_platform_id="$(echo "${target_platform_id}" | tr \/ _)"
-       echo "target-platform-id=${target_platform_id}"
-       echo "::set-output name=target-platform-id::${target_platform_id}"
        readarray -t make_targets < <(cat << EOF
        ${{ inputs.targets }}EOF
        )
 
        make_targets_str="${make_targets[*]}"
        target_id="$(echo "${make_targets_str}" | tr \/ _)"
-       echo "target-id=${target_id}"
        echo "::set-output name=target-id::${target_id}"
-       echo "targets=${targets}"
        echo "::set-output name=targets::${make_targets_str}"
        echo "::set-output name=buildx-cache::/tmp/.buildx-cache"
-       buildx_cache_key="${target_platform_id}-buildx-"
+       buildx_cache_key="${PLATFORM_ID}-buildx-"
        restore_keys=("${buildx_cache_key}")
        if [[ -n "${target_id}" ]]; then
          buildx_cache_key="${buildx_cache_key}${target_id}-"
@@ -107,8 +102,8 @@ runs:
        restore_keys_uriencoded="$(printf '%s\n' "${restore_keys[@]}" | jq -sRr @uri)"
        echo "::set-output name=buildx-cache-restore-keys::${restore_keys_uriencoded}"
 
-       echo 'VERSION=${{ steps.setup-project-info.outputs.version }}' >> "${GITHUB_ENV}"
-       echo 'BUILDTIME=${{ steps.setup-project-info.outputs.buildtime }}' >> "${GITHUB_ENV}"
+       echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+       echo 'BUILDTIME=${BUILDTIME}' >> "${GITHUB_ENV}"
      shell: bash
 
    - name: Set up QEMU
