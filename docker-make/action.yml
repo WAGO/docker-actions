@@ -93,6 +93,8 @@ runs:
       BASE_DEBIAN_DISTRO: ${{ inputs.base-debian-distro }}
       BUILDX_CACHE: ${{ steps.setup-docker-make.outputs.buildx-cache }}
       BIND_DIR: ${{ inputs.build-output }}
+      BUILDTIME: ${{ steps.setup-docker-make.outputs.buildtime }}
+      VERSION: ${{ steps.setup-docker-make.outputs.version }}
     run: |
       readarray -t make_targets < <(cat << EOF
       ${{ inputs.targets }}EOF

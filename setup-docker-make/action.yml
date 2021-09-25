@@ -38,22 +38,28 @@ inputs:
 outputs:
   buildx-cache:
     description: Path to Buildx cache string
-    value: ${{ steps.set-metainfo.outputs.buildx-cache }}
+    value: ${{ steps.set-meta-info.outputs.buildx-cache }}
   buildx-cache-key:
     description: Key of Buildx cache string
-    value: ${{ steps.set-metainfo.outputs.buildx-cache-key }}
+    value: ${{ steps.set-meta-info.outputs.buildx-cache-key }}
   target-platform-id:
     description: Target platform id string
-    value: ${{ steps.set-metainfo.outputs.target-platform-id }}
+    value: ${{ steps.set-artifact-info.outputs.platform-id }}
   target-id:
     description: Target id string
-    value: ${{ steps.set-artifact-info.outputs.platform-id }}
+    value: ${{ steps.set-meta-info.outputs.target-id }}
   targets:
     description: Target names as string
-    value: ${{ steps.set-metainfo.outputs.targets }}
+    value: ${{ steps.set-meta-info.outputs.targets }}
   golang-imageref:
     description: Go image reference string
     value: ${{ steps.subst-golang_imageref.outputs.result }}
+  buildtime:
+    description: Build time as string
+    value: ${{ steps.set-artifact-info.outputs.buildtime }}
+  version:
+    description: Effective version string
+    value: ${{ steps.set-artifact-info.outputs.version }}
 
 runs:
   using: composite
@@ -68,18 +74,16 @@ runs:
        command -V jq
      shell: sh
 
-   - name: Retrieve Artifact information
+   - name: Set artifact information
      id: set-artifact-info
      uses: WAGO/docker-actions/artifact-info@release/v1.0
      with:
        version: ${{ inputs.project-version }}
        platform: ${{ inputs.target-platform }}
 
-   - name: Set Meta information
-     id: set-metainfo
+   - name: Set meta information
+     id: set-meta-info
      env:
-       VERSION: ${{ steps.set-artifact-info.outputs.version }}
-       BUILDTIME: ${{ steps.set-artifact-info.outputs.buildtime }}
        PLATFORM_ID: ${{ steps.set-artifact-info.outputs.platform-id }}
      run: |
        readarray -t make_targets < <(cat << EOF
@@ -101,9 +105,6 @@ runs:
        echo "::set-output name=buildx-cache-key::${buildx_cache_key}"
        restore_keys_uriencoded="$(printf '%s\n' "${restore_keys[@]}" | jq -sRr @uri)"
        echo "::set-output name=buildx-cache-restore-keys::${restore_keys_uriencoded}"
-
-       echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
-       echo 'BUILDTIME=${BUILDTIME}' >> "${GITHUB_ENV}"
      shell: bash
 
    - name: Set up QEMU
@@ -123,9 +124,9 @@ runs:
    - name: Cache Docker layers
      uses: actions/cache@v2
      with:
-       path: ${{ steps.set-metainfo.outputs.buildx-cache }}
-       key: ${{ steps.set-metainfo.outputs.buildx-cache-key }}
-       restore-keys: ${{ steps.set-metainfo.outputs.buildx-cache-restore-keys }}
+       path: ${{ steps.set-meta-info.outputs.buildx-cache }}
+       key: ${{ steps.set-meta-info.outputs.buildx-cache-key }}
+       restore-keys: ${{ steps.set-meta-info.outputs.buildx-cache-restore-keys }}
 
    - name: Check Docker configuration
      env:
