@@ -118,13 +118,17 @@ runs:
       docker_build_args+=("--cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max")
 
       platform="${{ inputs.target-platform }}"
-      if [[ -n "${platform}" ]] && [[ "${{ inputs.host-arch }}" != "$(dpkg --print-architecture)" ]]; then
-        docker_build_args+=("--platform ${platform}")
+      if [[ -n "${platform}" ]]; then
+        if [[ "${{ inputs.host-arch }}" != "$(dpkg --print-architecture)" ]]; then
+          docker_build_args+=("--platform ${platform}")
+        else
+          make_args+=("DOCKER_CROSSPLATFORMS=${platform}")
+        fi
       fi
 
       docker_build_args+=("${buildx_build_args[*]}")
 
-      make "${make_targets[@]}" "${make_args[@]}" DOCKER_BUILD_ARGS="${docker_build_args[*]}" DOCKER_CROSSPLATFORMS="${platform}"
+      make "${make_targets[@]}" "${make_args[@]}" DOCKER_BUILD_ARGS="${docker_build_args[*]}"
     shell: bash
     
   # Temp fix
