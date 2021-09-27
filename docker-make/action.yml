@@ -112,7 +112,7 @@ runs:
       docker_build_args=()
       docker_build_args+=("--build-arg BASE_DEBIAN_DISTRO=${BASE_DEBIAN_DISTRO}")
       docker_build_args+=("--build-arg GOLANG_IMAGE=${GOLANG_IMAGE}")
-      docker_build_args+=("--build-arg MAKEFLAGS='-j$(((${nproc}+1))) -l${nproc}}${MAKEFLAGS:+ ${MAKEFLAGS}}'")
+      docker_build_args+=("--build-arg MAKEFLAGS='-j$(((${nproc}+1))) -l${nproc}${MAKEFLAGS:+ ${MAKEFLAGS}}'")
 
       docker_build_args+=("--cache-from type=local,src=${BUILDX_CACHE}")
       docker_build_args+=("--cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max")
