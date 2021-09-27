@@ -72,6 +72,7 @@ runs:
       command -V bash
       command -V rm
       command -V mv
+      command -V dpkg
     shell: sh
 
   - name: Set up node for docker make
@@ -106,16 +107,26 @@ runs:
       ${{ inputs.make-args }}EOF
       )
 
+      nproc=$(nproc)
+
       docker_build_args=()
+      docker_build_args+=("--build-arg SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}")
+      docker_build_args+=("--build-arg BUILDTIME=${BUILDTIME}")
+      docker_build_args+=("--build-arg BASE_DEBIAN_DISTRO=${BASE_DEBIAN_DISTRO}")
+      docker_build_args+=("--build-arg GOLANG_IMAGE=${GOLANG_IMAGE}")
+      docker_build_args+=("--build-arg MAKEFLAGS='-j$(((${nproc}+1))) -l${nproc}}${MAKEFLAGS:+ ${MAKEFLAGS}}'")
+
       docker_build_args+=("--cache-from type=local,src=${BUILDX_CACHE}")
       docker_build_args+=("--cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max")
-      docker_build_args+=("--build-arg SOURCE_DATE_EPOCH")
-      docker_build_args+=("--build-arg BUILDTIME")
-      docker_build_args+=("--build-arg BASE_DEBIAN_DISTRO")
-      docker_build_args+=("--build-arg GOLANG_IMAGE")
+
+      platform="${{ inputs.target-platform }}"
+      if [[ -n "${platform}" ]] && [[ "${{ inputs.host-arch }}" != "$(dpkg --print-architecture)" ]]; then
+        docker_build_args+=("--platform ${platform}")
+      fi
+
       docker_build_args+=("${buildx_build_args[*]}")
 
-      make "${make_targets[@]}" "${make_args[@]}" DOCKER_BUILD_ARGS="${docker_build_args[*]}" DOCKER_CROSSPLATFORMS="${{ inputs.target-platform }}"
+      make "${make_targets[@]}" "${make_args[@]}" DOCKER_BUILD_ARGS="${docker_build_args[*]}" DOCKER_CROSSPLATFORMS="${platform}"
     shell: bash
     
   # Temp fix
