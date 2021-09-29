@@ -1,0 +1,53 @@
+name: Download release asset
+description: Download release asset
+author: nosamad
+
+inputs:
+  repository:
+    description: GitHub repository
+    required: true
+  token:
+    description: GitHub auth token
+    required: true
+  tag:
+    description: Tag name
+    default:  latest
+    required: false
+  download-url-filter:
+    description: Download URL filter
+    default:  ''
+    required: false
+
+outputs:
+  file-paths:
+    description: Downloaded assets
+    value: ${{ steps.download-assets.outputs.file-paths }} 
+
+runs:
+ using: composite
+
+ steps:
+   - name: Check environment
+     run: |
+       command -V curl
+       command -V jq
+       command -V bash
+     shell: sh
+     
+   - name: Download assets and check integrity
+     id: download-assets
+     env:
+       DOWNLOAD_ASSET_REPO: ${{ inputs.repository }}
+       DOWNLOAD_ASSET_TAG: ${{ inputs.tag }}
+       DOWNLOAD_ASSET_TOKEN: ${{ inputs.token }}
+       DOWNLOAD_ASSET_URL_FILTER: ${{ inputs.download-url-filter }}
+     run: |
+       readarray -t file_paths < <("${GITHUB_ACTION_PATH}/download-release-asset.sh")
+       for f in "${file_paths[@]}"; do
+         if [[ "${f}" == *.sha256sum ]]; then
+           sha256sum -c "${f}"
+         fi
+       done
+       file_paths_uriencoded="$(printf '%s\n' "${file_paths[@]}" | jq -sRr @uri)"
+       echo "::set-output name=file-paths::${file_paths_uriencoded}"
+     shell: bash
