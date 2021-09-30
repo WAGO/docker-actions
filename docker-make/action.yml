@@ -107,7 +107,7 @@ runs:
       ${{ inputs.make-args }}EOF
       )
 
-      nproc=$(nproc)
+      nproc="$(nproc)"
 
       docker_build_args=()
       docker_build_args+=("--build-arg BASE_DEBIAN_DISTRO=${BASE_DEBIAN_DISTRO}")
