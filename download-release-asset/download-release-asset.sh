@@ -57,7 +57,7 @@ function main() {
       --location \
       --fail \
       --output "${filename}"
-    echo "${PWD}/${filename}"
+    echo "${filename}"
   done
 }
 
