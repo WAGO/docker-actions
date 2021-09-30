@@ -13,12 +13,19 @@ inputs:
     description: Tag name
     default:  latest
     required: false
-  download-url-filter:
-    description: Download URL filter
-    default:  ''
+  url-filterpattern:
+    description: Download URL filter pattern (regex)
+    default:  '.*'
+    required: false
+  working-directory:
+    description: Download directory
+    default:  '.'
     required: false
 
 outputs:
+  root-path:
+    description: Root location of downloaded assets
+    value: ${{ steps.download-assets.outputs.root-path }} 
   file-paths:
     description: Downloaded assets
     value: ${{ steps.download-assets.outputs.file-paths }} 
@@ -40,14 +47,29 @@ runs:
        DOWNLOAD_ASSET_REPO: ${{ inputs.repository }}
        DOWNLOAD_ASSET_TAG: ${{ inputs.tag }}
        DOWNLOAD_ASSET_TOKEN: ${{ inputs.token }}
-       DOWNLOAD_ASSET_URL_FILTER: ${{ inputs.download-url-filter }}
+       DOWNLOAD_ASSET_URLFILTERPATTERN: ${{ inputs.url-filterpattern }}
      run: |
+       echo "::set-output name=root-path::${PWD}"
        readarray -t file_paths < <("${GITHUB_ACTION_PATH}/download-release-asset.sh")
-       for f in "${file_paths[@]}"; do
-         if [[ "${f}" == *.sha256sum ]]; then
-           sha256sum -c "${f}"
-         fi
-       done
-       file_paths_uriencoded="$(printf '%s\n' "${file_paths[@]}" | jq -sRr @uri)"
+       file_paths_uriencoded="$(printf '%s%%0A' "${file_paths[@]}")"
        echo "::set-output name=file-paths::${file_paths_uriencoded}"
      shell: bash
+     working-directory: ${{ inputs.working-directory }}
+
+   - name: Check integrity
+     run: |
+       readarray -t file_paths < <(cat << EOF
+       ${{ steps.download-assets.outputs.file-paths }}EOF
+       )
+       
+       for f in "${file_paths[@]}"; do
+         if [[ "${f}" =~ .sha256sum$ ]]; then
+           sha256sum -c "${f}"
+         elif [[ "${f}" =~ .md5sum$ ]]; then
+           md5sum -c "${f}"
+         fi
+       done
+     shell: bash
+     working-directory: ${{ steps.download-assets.outputs.root-path }} 
+
+
