@@ -8,8 +8,12 @@ DOWNLOAD_ASSET_REPO="${DOWNLOAD_ASSET_REPO:-${GITHUB_REPOSITORY}}"
 DOWNLOAD_ASSET_TAG="${DOWNLOAD_ASSET_TAG:-latest}"
 DOWNLOAD_ASSET_URLFILTERPATTERN="${DOWNLOAD_ASSET_URLFILTERPATTERN:-.*}"
 
+function trace_call() {
+  echo "$@" 1>&2
+  "$@"
+} 
+
 function curl() {
-  echo "curl " "$@" 1>&2
   command curl \
     --header "authorization: Bearer ${DOWNLOAD_ASSET_TOKEN}" \
     "$@"
@@ -35,13 +39,20 @@ function main() {
   readarray -t asset_urls < <(curl \
       --url "${GITHUB_API_URL}/repos/${DOWNLOAD_ASSET_REPO}/releases" \
       --header 'Accept: application/json' \
+      --silent \
+      --show-error \
       --fail \
     | jq -r "${jq_asset_filter} | .browser_download_url | select(.|test(\"${DOWNLOAD_ASSET_URLFILTERPATTERN}\"))" \
   )
   
+  if [[ "${#asset_urls[@]}" -lt 1 ]]; then
+    echo "$0:error: No assets matching filter pattern \"${DOWNLOAD_ASSET_URLFILTERPATTERN}\"" 1>&2
+    exit 2
+  fi
+
   for url in "${asset_urls[@]}"; do
     filename="$(basename "${url}")"
-    curl \
+    trace_call curl \
       --url "${url}" \
       --location \
       --fail \
